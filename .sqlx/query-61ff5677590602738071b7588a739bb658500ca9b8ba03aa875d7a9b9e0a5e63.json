@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nINSERT INTO location (\nid,\nname)\nSELECT DISTINCT ON (id) id, name FROM UNNEST(\n    $1::VARCHAR[],\n    $2::VARCHAR[])\nAS t(id, name)\nON CONFLICT DO\nNOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "VarcharArray",
+        "VarcharArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61ff5677590602738071b7588a739bb658500ca9b8ba03aa875d7a9b9e0a5e63"
+}
