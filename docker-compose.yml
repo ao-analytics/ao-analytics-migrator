@@ -1,0 +1,11 @@
+services:
+  ao-analytics-migrator:
+    container_name: ao-analytics-migrator
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    depends_on:
+      - aodata-db
