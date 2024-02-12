@@ -6,6 +6,6 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./data:/data
-    restart: unless-stopped
+    restart: no
     depends_on:
-      - aodata-db
+      - ao-analytics-db
