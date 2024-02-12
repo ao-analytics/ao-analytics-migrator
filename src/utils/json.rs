@@ -1,4 +1,3 @@
-/*
 use aodata_models::json;
 
 
@@ -37,4 +36,3 @@ pub fn get_locations_from_file(path: &str) -> Option<Vec<json::Location>> {
         }
     }
 }
-*/

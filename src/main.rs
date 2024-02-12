@@ -1,5 +1,4 @@
 use aodata_models::json;
-use bytes::Bytes;
 use tracing::{info, warn};
 
 #[macro_use]
@@ -21,19 +20,8 @@ async fn main() {
 
     info!("Starting migration...");
 
-    let localizations_bytes = get_bytes_from_url(dotenv!("LOCALIZATIONS_URL"))
-        .await
-        .unwrap();
-
-    info!("Got localizations...");
-
-    let locations_bytes = get_bytes_from_url(dotenv!("LOCATIONS_URL")).await.unwrap();
-
-    info!("Got locations...");
-
-    let localizations: Vec<json::Localization> =
-        serde_json::from_slice(&localizations_bytes).unwrap();
-    let locations: &Vec<json::Location> = &serde_json::from_slice(&locations_bytes).unwrap();
+    let localizations: Vec<json::Localization> = utils::json::get_localizations_from_file(dotenv!("LOCALIZATIONS_PATH")).unwrap();
+    let locations: &Vec<json::Location> = &utils::json::get_locations_from_file(dotenv!("LOCATIONS_PATH")).unwrap();
 
     let result = utils::db::insert_items(&pool, &localizations).await;
 
@@ -57,10 +45,4 @@ async fn main() {
     }
 
     pool.close().await;
-}
-
-async fn get_bytes_from_url(url: &str) -> Result<Bytes, reqwest::Error> {
-    let bytes = reqwest::get(url).await?.bytes().await?;
-
-    Ok(bytes)
 }

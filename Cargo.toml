@@ -15,7 +15,6 @@ sqlx = { version = "0.7.2", features = ["postgres", "macros", "runtime-tokio", "
 dotenv = "0.15.0"
 dotenv_codegen = "0.15.0"
 aodata_models = { version = "*", git = "https://github.com/ao-analytics/ao-analytics-models.git"}
-reqwest = "0.11.24"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 
