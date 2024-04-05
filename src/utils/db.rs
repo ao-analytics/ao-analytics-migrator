@@ -1,6 +1,14 @@
 use aodata_models::json;
 use sqlx::{postgres::PgQueryResult, PgPool};
 
+pub struct Item {
+    pub unique_name: String,
+    pub enchantment_level: i32,
+    pub shop_sub_category_id: Option<String>,
+    pub tier: Option<i32>,
+    pub weight: Option<f32>
+}
+
 pub async fn insert_locations(
     pool: &PgPool,
     locations: &Vec<json::Location>,
@@ -24,8 +32,8 @@ SELECT DISTINCT ON (id) id, name FROM UNNEST(
     $1::VARCHAR[],
     $2::VARCHAR[])
 AS t(id, name)
-ON CONFLICT DO
-NOTHING",
+ON CONFLICT (id) DO UPDATE
+    SET name = EXCLUDED.name",
         &location_ids,
         &location_names
     )
@@ -34,287 +42,270 @@ NOTHING",
 
     transaction.commit().await.unwrap();
 
-    return Ok(())
+    return Ok(());
 }
 
 pub async fn insert_items(
     pool: &PgPool,
-    items: &Vec<json::Localization>,
+    json_items: &Vec<json::Item>,
 ) -> Result<PgQueryResult, sqlx::Error> {
+
+    let mut items: Vec<Item> = Vec::new();
+
+    for json_item in json_items {
+        let mut unique_name = json_item.unique_name.clone();
+
+        let parsed_enchantment_level = json_item.enchantment_level.as_ref()
+            .map_or(0, |enchantment_level| enchantment_level.parse::<i32>().unwrap_or(0));
+
+        if parsed_enchantment_level > 0 {
+            unique_name = format!("{}@{}", unique_name, parsed_enchantment_level);
+        }
+
+        let shop_sub_category = json_item.shop_sub_category.clone();
+
+        let parsed_tier = json_item.tier.as_ref()
+            .and_then(|tier| tier.parse::<i32>().ok());
+
+        let parsed_weight = json_item.weight.as_ref()
+            .and_then(|weight| weight.parse::<f32>().ok());
+
+
+        items.push(Item {
+            unique_name: unique_name,
+            enchantment_level: parsed_enchantment_level,
+            shop_sub_category_id: shop_sub_category,
+            tier: parsed_tier,
+            weight: parsed_weight
+        });
+
+        if let Some(json_enchantment) = &json_item.enchantments {
+            for enchantment in &json_enchantment.enchantment {
+                let enchantment_level = enchantment.enchantment_level.parse::<i32>().unwrap_or(0);
+
+                let unique_name = format!("{}@{}", json_item.unique_name.clone(), enchantment_level);
+
+                let weight = enchantment.weight.as_ref()
+                    .and_then(|weight| weight.parse::<f32>().ok()).or(parsed_weight);
+
+
+                items.push(Item {
+                    unique_name: unique_name,
+                    enchantment_level: enchantment_level,
+                    shop_sub_category_id: json_item.shop_sub_category.clone(),
+                    tier: parsed_tier.clone(),
+                    weight: weight
+                });
+            }
+        }
+    }
+
+    let item_unique_names: Vec<String> = items.iter().map(|item| item.unique_name.clone()).collect();
+    let enchantment_levels: Vec<i32> = items.iter().map(|item| item.enchantment_level).collect();
+    let shop_sub_category_ids: Vec<Option<String>> = items.iter().map(|item| item.shop_sub_category_id.clone()).collect();
+    let tiers: Vec<Option<i32>> = items.iter().map(|item| item.tier.clone()).collect();
+    let weights: Vec<Option<f32>> = items.iter().map(|item| item.weight.clone()).collect();
 
     let transaction = pool.begin().await.unwrap();
 
-    let mut item_ids: Vec<i32> = Vec::new();
-    let mut item_unique_names: Vec<String> = Vec::new();
+    let result = sqlx::query(
+        "
+INSERT INTO item_data (
+    item_unique_name,
+    enchantment_level,
+    shop_sub_category_id,
+    tier,
+    weight)
+SELECT * FROM UNNEST(
+    $1::VARCHAR[],
+    $2::INT[],
+    $3::VARCHAR[],
+    $4::INT[],
+    $5::FLOAT8[])
+ON CONFLICT (item_unique_name) DO UPDATE
+    SET enchantment_level = EXCLUDED.enchantment_level,
+        shop_sub_category_id = EXCLUDED.shop_sub_category_id,
+        tier = EXCLUDED.tier,
+        weight = EXCLUDED.weight",
+    )
+    .bind(&item_unique_names)
+    .bind(&enchantment_levels)
+    .bind(&shop_sub_category_ids)
+    .bind(&tiers)
+    .bind(&weights)
+    .execute(pool)
+    .await;
 
-    for item in items {
-        let item_id: i32 = match item.id.parse() {
-            Ok(id) => id,
-            Err(_) => continue,
-        };
+    transaction.commit().await.unwrap();
 
-        if item_ids.contains(&item_id) {
-            continue;
-        }
+    return result;
+}
 
-        item_ids.push(item_id);
-        item_unique_names.push(item.item.to_string());
+pub async fn insert_shop_categories(
+    pool: &PgPool,
+    shop_categories: &Vec<json::ShopCategory>,
+) -> Result<PgQueryResult, sqlx::Error> {
+    let mut ids: Vec<String> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+
+    for shop_category in shop_categories {
+        ids.push(shop_category.id.clone());
+        names.push(shop_category.value.clone());
     }
+
+    let transaction = pool.begin().await.unwrap();
 
     let result = sqlx::query!(
         "
-INSERT INTO item (
+INSERT INTO shop_category (
     id,
-    unique_name)
+    name)
 SELECT * FROM UNNEST(
-    $1::INTEGER[],
+    $1::VARCHAR[],
     $2::VARCHAR[])
-ON CONFLICT DO
-    NOTHING",
-        &item_ids,
+ON CONFLICT DO NOTHING",
+        &ids,
+        &names
+    )
+    .execute(pool)
+    .await;
+
+    transaction.commit().await.unwrap();
+
+    return result;
+}
+
+pub async fn insert_shop_sub_categories(
+    pool: &PgPool,
+    shop_categories: &Vec<json::ShopCategory>,
+) -> Result<PgQueryResult, sqlx::Error> {
+    let mut ids: Vec<String> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    let mut shop_category_ids: Vec<String> = Vec::new();
+
+    for shop_category in shop_categories {
+        for shop_sub_category in &shop_category.shop_sub_category {
+            ids.push(shop_sub_category.id.clone());
+            names.push(shop_sub_category.value.clone());
+            shop_category_ids.push(shop_category.id.clone());
+        }
+    }
+
+    let transaction = pool.begin().await.unwrap();
+
+    let result = sqlx::query!(
+        "
+INSERT INTO shop_sub_category (
+    id,
+    name,
+    shop_category_id)
+SELECT * FROM UNNEST(
+    $1::VARCHAR[],
+    $2::VARCHAR[],
+    $3::VARCHAR[])
+ON CONFLICT DO NOTHING",
+        &ids,
+        &names,
+        &shop_category_ids
+    )
+    .execute(pool)
+    .await;
+
+    transaction.commit().await.unwrap();
+
+    return result;
+}
+
+pub async fn insert_localizations(
+    pool: &PgPool,
+    localizations: &Vec<json::Localization>,
+) -> Result<(), sqlx::Error> {
+    let mut item_unique_names: Vec<String> = Vec::new();
+
+    let mut descriptions_item_unique_names: Vec<String> = Vec::new();
+    let mut descriptions_langs: Vec<String> = Vec::new();
+    let mut descriptions_values: Vec<String> = Vec::new();
+
+    let mut names_item_unique_names: Vec<String> = Vec::new();
+    let mut names_langs: Vec<String> = Vec::new();
+    let mut names_values: Vec<String> = Vec::new();
+
+    for localization in localizations {
+        let item_unique_name = &localization.item;
+
+        item_unique_names.push(item_unique_name.clone());
+
+        if let Some(localized_descriptions) = &localization.localized_descriptions {
+            localized_descriptions.iter().for_each(|(lang, value)| {
+                descriptions_item_unique_names.push(item_unique_name.clone());
+                descriptions_langs.push(lang.clone());
+                descriptions_values.push(value.clone());
+            });
+        }
+
+        if let Some(localized_names) = &localization.localized_names {
+            localized_names.iter().for_each(|(lang, value)| {
+                names_item_unique_names.push(item_unique_name.clone());
+                names_langs.push(lang.clone());
+                names_values.push(value.clone());
+            });
+        }
+    }
+
+    let transaction = pool.begin().await?;
+
+    sqlx::query!(
+        "
+INSERT INTO item (
+    unique_name)
+SELECT DISTINCT ON (unique_name) unique_name FROM UNNEST(
+    $1::VARCHAR[])
+AS t(unique_name)
+ON CONFLICT DO NOTHING",
         &item_unique_names
     )
     .execute(pool)
     .await?;
 
-    transaction.commit().await.unwrap();
-
-    return Ok(result);
-}
-
-pub async fn insert_localizations(
-    pool: &PgPool,
-    localizations: Vec<json::Localization>,
-) -> Result<(), sqlx::Error> {
-
-    // Probably a better way to do this...
-    
-    let mut descriptions_item_unique_names: Vec<String> = Vec::new();
-    let mut descriptions_en_us: Vec<Option<String>> = Vec::new();
-    let mut descriptions_de_de: Vec<Option<String>> = Vec::new();
-    let mut descriptions_fr_fr: Vec<Option<String>> = Vec::new();
-    let mut descriptions_ru_ru: Vec<Option<String>> = Vec::new();
-    let mut descriptions_pl_pl: Vec<Option<String>> = Vec::new();
-    let mut descriptions_es_es: Vec<Option<String>> = Vec::new();
-    let mut descriptions_pt_br: Vec<Option<String>> = Vec::new();
-    let mut descriptions_it_it: Vec<Option<String>> = Vec::new();
-    let mut descriptions_zh_cn: Vec<Option<String>> = Vec::new();
-    let mut descriptions_ko_kr: Vec<Option<String>> = Vec::new();
-    let mut descriptions_ja_jp: Vec<Option<String>> = Vec::new();
-    let mut descriptions_zh_tw: Vec<Option<String>> = Vec::new();
-    let mut descriptions_id_id: Vec<Option<String>> = Vec::new();
-    let mut descriptions_tr_tr: Vec<Option<String>> = Vec::new();
-    let mut descriptions_ar_sa: Vec<Option<String>> = Vec::new();
-    let mut names_item_unique_names: Vec<String> = Vec::new();
-    let mut names_en_us: Vec<Option<String>> = Vec::new();
-    let mut names_de_de: Vec<Option<String>> = Vec::new();
-    let mut names_fr_fr: Vec<Option<String>> = Vec::new();
-    let mut names_ru_ru: Vec<Option<String>> = Vec::new();
-    let mut names_pl_pl: Vec<Option<String>> = Vec::new();
-    let mut names_es_es: Vec<Option<String>> = Vec::new();
-    let mut names_pt_br: Vec<Option<String>> = Vec::new();
-    let mut names_it_it: Vec<Option<String>> = Vec::new();
-    let mut names_zh_cn: Vec<Option<String>> = Vec::new();
-    let mut names_ko_kr: Vec<Option<String>> = Vec::new();
-    let mut names_ja_jp: Vec<Option<String>> = Vec::new();
-    let mut names_zh_tw: Vec<Option<String>> = Vec::new();
-    let mut names_id_id: Vec<Option<String>> = Vec::new();
-    let mut names_tr_tr: Vec<Option<String>> = Vec::new();
-    let mut names_ar_sa: Vec<Option<String>> = Vec::new();
-
-    for localization in localizations {
-        let item_unique_name = &localization.item;
-
-        if let Some(localized_descriptions) = localization.localized_descriptions {
-            descriptions_item_unique_names.push(item_unique_name.to_string());
-            descriptions_en_us.push(localized_descriptions.en_us);
-            descriptions_de_de.push(localized_descriptions.de_de);
-            descriptions_fr_fr.push(localized_descriptions.fr_fr);
-            descriptions_ru_ru.push(localized_descriptions.ru_ru);
-            descriptions_pl_pl.push(localized_descriptions.pl_pl);
-            descriptions_es_es.push(localized_descriptions.es_es);
-            descriptions_pt_br.push(localized_descriptions.pt_br);
-            descriptions_it_it.push(localized_descriptions.it_it);
-            descriptions_zh_cn.push(localized_descriptions.zh_cn);
-            descriptions_ko_kr.push(localized_descriptions.ko_kr);
-            descriptions_ja_jp.push(localized_descriptions.ja_jp);
-            descriptions_zh_tw.push(localized_descriptions.zh_tw);
-            descriptions_id_id.push(localized_descriptions.id_id);
-            descriptions_tr_tr.push(localized_descriptions.tr_tr);
-            descriptions_ar_sa.push(localized_descriptions.ar_sa);
-        }
-
-        if let Some(localized_names) = localization.localized_names {
-            names_item_unique_names.push(item_unique_name.to_string());
-            names_en_us.push(localized_names.en_us);
-            names_de_de.push(localized_names.de_de);
-            names_fr_fr.push(localized_names.fr_fr);
-            names_ru_ru.push(localized_names.ru_ru);
-            names_pl_pl.push(localized_names.pl_pl);
-            names_es_es.push(localized_names.es_es);
-            names_pt_br.push(localized_names.pt_br);
-            names_it_it.push(localized_names.it_it);
-            names_zh_cn.push(localized_names.zh_cn);
-            names_ko_kr.push(localized_names.ko_kr);
-            names_ja_jp.push(localized_names.ja_jp);
-            names_zh_tw.push(localized_names.zh_tw);
-            names_id_id.push(localized_names.id_id);
-            names_tr_tr.push(localized_names.tr_tr);
-            names_ar_sa.push(localized_names.ar_sa);
-        }
-    }
-
-    let description_sql = r"
+    sqlx::query!(
+        "
 INSERT INTO localized_description (
     item_unique_name,
-    en_us,
-    de_de,
-    fr_fr,
-    ru_ru,
-    pl_pl,
-    es_es,
-    pt_br,
-    it_it,
-    zh_cn,
-    ko_kr,
-    ja_jp,
-    zh_tw,
-    id_id,
-    tr_tr,
-    ar_sa)
+    lang,
+    description)
 SELECT * FROM UNNEST(
-    $1,
-    $2,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10,
-    $11,
-    $12,
-    $13,
-    $14,
-    $15,
-    $16)
-ON CONFLICT (item_unique_name) DO
-    UPDATE SET
-        en_us = EXCLUDED.en_us,
-        de_de = EXCLUDED.de_de,
-        fr_fr = EXCLUDED.fr_fr,
-        ru_ru = EXCLUDED.ru_ru,
-        pl_pl = EXCLUDED.pl_pl,
-        es_es = EXCLUDED.es_es,
-        pt_br = EXCLUDED.pt_br,
-        it_it = EXCLUDED.it_it,
-        zh_cn = EXCLUDED.zh_cn,
-        ko_kr = EXCLUDED.ko_kr,
-        ja_jp = EXCLUDED.ja_jp,
-        zh_tw = EXCLUDED.zh_tw,
-        id_id = EXCLUDED.id_id,
-        tr_tr = EXCLUDED.tr_tr,
-        ar_sa = EXCLUDED.ar_sa";
+    $1::VARCHAR[],
+    $2::VARCHAR[],
+    $3::VARCHAR[])
+ON CONFLICT (item_unique_name, lang) DO NOTHING",
+        &descriptions_item_unique_names,
+        &descriptions_langs,
+        &descriptions_values
+    )
+    .execute(pool)
+    .await?;
 
-    let names_sql = r"
+    sqlx::query!(
+        "
 INSERT INTO localized_name (
     item_unique_name,
-    en_us,
-    de_de,
-    fr_fr,
-    ru_ru,
-    pl_pl,
-    es_es,
-    pt_br,
-    it_it,
-    zh_cn,
-    ko_kr,
-    ja_jp,
-    zh_tw,
-    id_id,
-    tr_tr,
-    ar_sa)
+    lang,
+    name)
 SELECT * FROM UNNEST(
-    $1,
-    $2,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10,
-    $11,
-    $12,
-    $13,
-    $14,
-    $15,
-    $16)
-ON CONFLICT (item_unique_name) DO
-    UPDATE SET
-        en_us = EXCLUDED.en_us::VARCHAR,
-        de_de = EXCLUDED.de_de::VARCHAR,
-        fr_fr = EXCLUDED.fr_fr::VARCHAR,
-        ru_ru = EXCLUDED.ru_ru::VARCHAR,
-        pl_pl = EXCLUDED.pl_pl::VARCHAR,
-        es_es = EXCLUDED.es_es::VARCHAR,
-        pt_br = EXCLUDED.pt_br::VARCHAR,
-        it_it = EXCLUDED.it_it::VARCHAR,
-        zh_cn = EXCLUDED.zh_cn::VARCHAR,
-        ko_kr = EXCLUDED.ko_kr::VARCHAR,
-        ja_jp = EXCLUDED.ja_jp::VARCHAR,
-        zh_tw = EXCLUDED.zh_tw::VARCHAR,
-        id_id = EXCLUDED.id_id::VARCHAR,
-        tr_tr = EXCLUDED.tr_tr::VARCHAR,
-        ar_sa = EXCLUDED.ar_sa::VARCHAR";
-
-    let transaction = pool.begin().await?;
-
-    sqlx::query(description_sql)
-        .bind(descriptions_item_unique_names)
-        .bind(descriptions_en_us)
-        .bind(descriptions_de_de)
-        .bind(descriptions_fr_fr)
-        .bind(descriptions_ru_ru)
-        .bind(descriptions_pl_pl)
-        .bind(descriptions_es_es)
-        .bind(descriptions_pt_br)
-        .bind(descriptions_it_it)
-        .bind(descriptions_zh_cn)
-        .bind(descriptions_ko_kr)
-        .bind(descriptions_ja_jp)
-        .bind(descriptions_zh_tw)
-        .bind(descriptions_id_id)
-        .bind(descriptions_tr_tr)
-        .bind(descriptions_ar_sa)
-        .fetch_all(pool)
-        .await?;
-
-    sqlx::query(names_sql)
-        .bind(names_item_unique_names)
-        .bind(names_en_us)
-        .bind(names_de_de)
-        .bind(names_fr_fr)
-        .bind(names_ru_ru)
-        .bind(names_pl_pl)
-        .bind(names_es_es)
-        .bind(names_pt_br)
-        .bind(names_it_it)
-        .bind(names_zh_cn)
-        .bind(names_ko_kr)
-        .bind(names_ja_jp)
-        .bind(names_zh_tw)
-        .bind(names_id_id)
-        .bind(names_tr_tr)
-        .bind(names_ar_sa)
-        .fetch_all(pool)
-        .await?;
+    $1::VARCHAR[],
+    $2::VARCHAR[],
+    $3::VARCHAR[])
+ON CONFLICT (item_unique_name, lang) DO NOTHING",
+        &names_item_unique_names,
+        &names_langs,
+        &names_values
+    )
+    .execute(pool)
+    .await?;
 
     transaction.commit().await?;
 
-    return Ok(())
+    return Ok(());
 }
 
 /* rust magic

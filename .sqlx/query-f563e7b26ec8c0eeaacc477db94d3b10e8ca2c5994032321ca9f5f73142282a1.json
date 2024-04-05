@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nINSERT INTO shop_sub_category (\n    id,\n    name,\n    shop_category_id)\nSELECT * FROM UNNEST(\n    $1::VARCHAR[],\n    $2::VARCHAR[],\n    $3::VARCHAR[])\nON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "VarcharArray",
+        "VarcharArray",
+        "VarcharArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f563e7b26ec8c0eeaacc477db94d3b10e8ca2c5994032321ca9f5f73142282a1"
+}
