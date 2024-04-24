@@ -6,7 +6,7 @@ pub struct Item {
     pub enchantment_level: i32,
     pub shop_sub_category_id: Option<String>,
     pub tier: Option<i32>,
-    pub weight: Option<f32>
+    pub weight: Option<f32>,
 }
 
 pub async fn insert_locations(
@@ -49,14 +49,17 @@ pub async fn insert_items(
     pool: &PgPool,
     json_items: &Vec<json::Item>,
 ) -> Result<PgQueryResult, sqlx::Error> {
-
     let mut items: Vec<Item> = Vec::new();
 
     for json_item in json_items {
         let mut unique_name = json_item.unique_name.clone();
 
-        let parsed_enchantment_level = json_item.enchantment_level.as_ref()
-            .map_or(0, |enchantment_level| enchantment_level.parse::<i32>().unwrap_or(0));
+        let parsed_enchantment_level = json_item
+            .enchantment_level
+            .as_ref()
+            .map_or(0, |enchantment_level| {
+                enchantment_level.parse::<i32>().unwrap_or(0)
+            });
 
         if parsed_enchantment_level > 0 {
             unique_name = format!("{}@{}", unique_name, parsed_enchantment_level);
@@ -64,45 +67,55 @@ pub async fn insert_items(
 
         let shop_sub_category = json_item.shop_sub_category.clone();
 
-        let parsed_tier = json_item.tier.as_ref()
+        let parsed_tier = json_item
+            .tier
+            .as_ref()
             .and_then(|tier| tier.parse::<i32>().ok());
 
-        let parsed_weight = json_item.weight.as_ref()
+        let parsed_weight = json_item
+            .weight
+            .as_ref()
             .and_then(|weight| weight.parse::<f32>().ok());
-
 
         items.push(Item {
             unique_name: unique_name,
             enchantment_level: parsed_enchantment_level,
             shop_sub_category_id: shop_sub_category,
             tier: parsed_tier,
-            weight: parsed_weight
+            weight: parsed_weight,
         });
 
         if let Some(json_enchantment) = &json_item.enchantments {
             for enchantment in &json_enchantment.enchantment {
                 let enchantment_level = enchantment.enchantment_level.parse::<i32>().unwrap_or(0);
 
-                let unique_name = format!("{}@{}", json_item.unique_name.clone(), enchantment_level);
+                let unique_name =
+                    format!("{}@{}", json_item.unique_name.clone(), enchantment_level);
 
-                let weight = enchantment.weight.as_ref()
-                    .and_then(|weight| weight.parse::<f32>().ok()).or(parsed_weight);
-
+                let weight = enchantment
+                    .weight
+                    .as_ref()
+                    .and_then(|weight| weight.parse::<f32>().ok())
+                    .or(parsed_weight);
 
                 items.push(Item {
                     unique_name: unique_name,
                     enchantment_level: enchantment_level,
                     shop_sub_category_id: json_item.shop_sub_category.clone(),
                     tier: parsed_tier.clone(),
-                    weight: weight
+                    weight: weight,
                 });
             }
         }
     }
 
-    let item_unique_names: Vec<String> = items.iter().map(|item| item.unique_name.clone()).collect();
+    let item_unique_names: Vec<String> =
+        items.iter().map(|item| item.unique_name.clone()).collect();
     let enchantment_levels: Vec<i32> = items.iter().map(|item| item.enchantment_level).collect();
-    let shop_sub_category_ids: Vec<Option<String>> = items.iter().map(|item| item.shop_sub_category_id.clone()).collect();
+    let shop_sub_category_ids: Vec<Option<String>> = items
+        .iter()
+        .map(|item| item.shop_sub_category_id.clone())
+        .collect();
     let tiers: Vec<Option<i32>> = items.iter().map(|item| item.tier.clone()).collect();
     let weights: Vec<Option<f32>> = items.iter().map(|item| item.weight.clone()).collect();
 
