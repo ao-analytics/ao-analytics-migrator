@@ -1,9 +1,6 @@
 use aodata_models::json;
 use tracing::{info, warn};
 
-#[macro_use]
-extern crate dotenv_codegen;
-
 mod utils;
 
 #[tokio::main]
@@ -55,7 +52,7 @@ async fn main() {
         Err(e) => warn!("Error inserting localizations: {}", e),
     }
 
-    let items = utils::json::get_items_from_file(dotenv!("ITEMS_PATH")).unwrap();
+    let items = utils::json::get_items_from_file(&config.items_path).unwrap();
     let result = utils::db::insert_items(&pool, &items).await;
 
     match result {
