@@ -1,5 +1,6 @@
 use aodata_models::json;
 use tracing::{info, warn};
+use utils::json::download_file_to_disk;
 
 mod utils;
 
@@ -16,6 +17,10 @@ async fn main() {
 
     tracing_subscriber::fmt::init();
 
+    download_file_to_disk(&config.items_url, &config.items_path).await;
+    download_file_to_disk(&config.locations_url, &config.locations_path).await;
+    download_file_to_disk(&config.localizations_url, &config.localizations_path).await;
+
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(5)
         .connect(&config.db_url)
@@ -24,8 +29,7 @@ async fn main() {
 
     info!("Starting migration...");
 
-    let shop_categories =
-        utils::json::get_shop_categories_from_file(&config.items_path).unwrap();
+    let shop_categories = utils::json::get_shop_categories_from_file(&config.items_path).unwrap();
     let result = utils::db::insert_shop_categories(&pool, &shop_categories).await;
 
     match result {
