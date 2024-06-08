@@ -1,7 +1,5 @@
-
-
 use aodata_models::json;
-use tracing::warn;
+use tracing::{info, warn};
 
 pub fn get_localizations_from_file(path: &str) -> Option<Vec<json::Localization>> {
     return match std::fs::read_to_string(path) {
@@ -140,4 +138,42 @@ pub fn get_shop_categories_from_file(path: &str) -> Option<Vec<json::ShopCategor
             None
         }
     };
+}
+
+pub async fn save_file_to_disk(path: &str, content: &str) {
+    match std::fs::write(path, content) {
+        Ok(_) => info!("File saved to disk: {}", path),
+        Err(e) => warn!("Error saving file to disk: {}", e),
+    }
+}
+
+pub async fn get_file_from_url(url: &str) -> Option<String> {
+    let result = reqwest::get(url).await;
+
+    let response = match result {
+        Ok(response) => response,
+        Err(e) => {
+            warn!("Error downloading file: {} from {}", e, url);
+            return None;
+        }
+    };
+
+    let content = match response.text().await {
+        Ok(content) => content,
+        Err(e) => {
+            warn!("Error reading downloaded file: {}", e);
+            return None;
+        }
+    };
+
+    return Some(content);
+}
+
+pub async fn download_file_to_disk(url: &str, path: &str) {
+    let content = get_file_from_url(url).await;
+
+    match content {
+        Some(content) => save_file_to_disk(path, &content).await,
+        None => (),
+    }
 }
