@@ -16,7 +16,7 @@ dotenv = "0.15.0"
 aodata_models = { version = "*", git = "https://github.com/ao-analytics/ao-analytics-models.git"}
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-reqwest = "0.12.4"
+reqwest = { version = "0.12.4", features = ["rustls-tls"] }
 
 [dev-dependencies]
 tokio = { version = "1.25.0", features = ["rt-multi-thread", "time", "sync"] }
