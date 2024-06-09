@@ -148,12 +148,22 @@ pub async fn save_file_to_disk(path: &str, content: &str) {
 }
 
 pub async fn get_file_from_url(url: &str) -> Option<String> {
-    let result = reqwest::get(url).await;
+    let client = reqwest::Client::builder().use_rustls_tls().build();
+
+    let client = match client {
+        Ok(client) => client,
+        Err(e) => {
+            warn!("Error creating client: {}", e);
+            return None;
+        }
+    };
+
+    let result = client.get(url).send().await;
 
     let response = match result {
         Ok(response) => response,
         Err(e) => {
-            warn!("Error downloading file: {} from {}", e, url);
+            warn!("Error downloading file: {}", e);
             return None;
         }
     };
