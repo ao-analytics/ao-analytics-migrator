@@ -42,7 +42,7 @@ ON CONFLICT (id) DO UPDATE
 
     transaction.commit().await.unwrap();
 
-    return Ok(());
+    Ok(())
 }
 
 pub async fn insert_items(
@@ -78,7 +78,7 @@ pub async fn insert_items(
             .and_then(|weight| weight.parse::<f32>().ok());
 
         items.push(Item {
-            unique_name: unique_name,
+            unique_name,
             enchantment_level: parsed_enchantment_level,
             shop_sub_category_id: shop_sub_category,
             tier: parsed_tier,
@@ -99,11 +99,11 @@ pub async fn insert_items(
                     .or(parsed_weight);
 
                 items.push(Item {
-                    unique_name: unique_name,
-                    enchantment_level: enchantment_level,
+                    unique_name,
+                    enchantment_level,
                     shop_sub_category_id: json_item.shop_sub_category.clone(),
-                    tier: parsed_tier.clone(),
-                    weight: weight,
+                    tier: parsed_tier,
+                    weight,
                 });
             }
         }
@@ -116,8 +116,8 @@ pub async fn insert_items(
         .iter()
         .map(|item| item.shop_sub_category_id.clone())
         .collect();
-    let tiers: Vec<Option<i32>> = items.iter().map(|item| item.tier.clone()).collect();
-    let weights: Vec<Option<f32>> = items.iter().map(|item| item.weight.clone()).collect();
+    let tiers: Vec<Option<i32>> = items.iter().map(|item| item.tier).collect();
+    let weights: Vec<Option<f32>> = items.iter().map(|item| item.weight).collect();
 
     let transaction = pool.begin().await.unwrap();
 
@@ -151,7 +151,7 @@ ON CONFLICT (item_unique_name) DO UPDATE
 
     transaction.commit().await.unwrap();
 
-    return result;
+    result
 }
 
 pub async fn insert_shop_categories(
@@ -185,7 +185,7 @@ ON CONFLICT DO NOTHING",
 
     transaction.commit().await.unwrap();
 
-    return result;
+    result
 }
 
 pub async fn insert_shop_sub_categories(
@@ -226,7 +226,7 @@ ON CONFLICT DO NOTHING",
 
     transaction.commit().await.unwrap();
 
-    return result;
+    result
 }
 
 pub async fn insert_localizations(
@@ -318,7 +318,7 @@ ON CONFLICT (item_unique_name, lang) DO NOTHING",
 
     transaction.commit().await?;
 
-    return Ok(());
+    Ok(())
 }
 
 /* rust magic
