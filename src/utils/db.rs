@@ -128,3 +128,45 @@ ON CONFLICT (item_unique_name, lang) DO NOTHING",
 
     Ok(())
 }
+
+pub async fn insert_item_data(
+    pool: &PgPool,
+    item_data: &Vec<json::item::Item>,
+) -> Result<(), sqlx::Error> {
+    let mut item_unique_names = Vec::new();
+    let mut item_data_values = Vec::new();
+
+    for item in item_data {
+        let mut unique_name = item.unique_name.clone();
+        if let Some(enchantment_level) = &item.enchantment_level {
+            if enchantment_level > &0 {
+                unique_name.push_str(&format!("@{}", enchantment_level));
+            }
+        }
+
+        item_unique_names.push(unique_name);
+        item_data_values.push(serde_json::to_value(item).unwrap());
+    }
+
+    let transaction = pool.begin().await?;
+
+    sqlx::query!(
+        "
+INSERT INTO item_data (
+    item_unique_name,
+    data)
+SELECT * FROM UNNEST(
+    $1::VARCHAR[],
+    $2::JSONB[])
+ON CONFLICT (item_unique_name) DO UPDATE
+    SET data = EXCLUDED.data",
+        &item_unique_names,
+        &item_data_values
+    )
+    .execute(pool)
+    .await?;
+
+    transaction.commit().await?;
+
+    Ok(())
+}

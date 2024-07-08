@@ -19,10 +19,6 @@ async fn main() {
         }
     };
 
-    if !config.skip_download_if_exists || !Path::new(&config.items_path).exists() {
-        download_file_to_disk(&config.items_url, &config.items_path).await;
-    }
-
     if !config.skip_download_if_exists || !Path::new(&config.locations_path).exists() {
         download_file_to_disk(&config.locations_url, &config.locations_path).await;
     }
@@ -43,21 +39,12 @@ async fn main() {
         utils::json::get_localizations_from_file(&config.localizations_path).unwrap();
     let locations: &Vec<json::location::Location> =
         &utils::json::get_locations_from_file(&config.locations_path).unwrap();
-    let items: Vec<json::item::Item> =
-        utils::json::get_items_from_file(&config.items_path).unwrap();
 
     let result = utils::db::insert_localizations(&pool, &localizations).await;
 
     match result {
         Ok(_) => info!("Inserted localizations"),
         Err(e) => warn!("Error inserting localizations: {}", e),
-    }
-
-    let result = utils::db::insert_item_data(&pool, &items).await;
-
-    match result {
-        Ok(_) => info!("Inserted items"),
-        Err(e) => warn!("Error inserting items: {}", e),
     }
 
     let result = utils::db::insert_locations(&pool, locations).await;
