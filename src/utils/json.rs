@@ -61,6 +61,11 @@ pub fn get_items_from_file(path: &str) -> Option<Vec<json::item::Item>> {
                     .for_each(|item| items_vec.push(item));
                 items
                     .items
+                    .siegebanner
+                    .into_iter()
+                    .for_each(|item| items_vec.push(item));
+                items
+                    .items
                     .consumable_item
                     .into_iter()
                     .for_each(|item| items_vec.push(item));
