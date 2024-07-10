@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use ao_analytics_models::json;
 use tracing::{info, warn};
 use utils::json::download_file_to_disk;
 
@@ -39,12 +38,10 @@ async fn main() {
 
     info!("Starting migration...");
 
-    let localizations: Vec<json::localization::Localization> =
+    let localizations =
         utils::json::get_localizations_from_file(&config.localizations_path).unwrap();
-    let locations: &Vec<json::location::Location> =
-        &utils::json::get_locations_from_file(&config.locations_path).unwrap();
-    let items: Vec<json::item::Item> =
-        utils::json::get_items_from_file(&config.items_path).unwrap();
+    let locations = &utils::json::get_locations_from_file(&config.locations_path).unwrap();
+    let items = utils::json::get_items_from_file(&config.items_path).unwrap();
 
     let result = utils::db::insert_localizations(&pool, &localizations).await;
 
