@@ -72,7 +72,7 @@ dependencies = [
 [[package]]
 name = "ao-analytics-models"
 version = "0.1.0"
-source = "git+https://github.com/ao-analytics/ao-analytics-models.git#741e77b09b01fcbdc2a07b71fa9665c6854e86dd"
+source = "git+https://github.com/ao-analytics/ao-analytics-models.git#d21fb8caecd4a5939eb9e1555e937e39707e9cb5"
 dependencies = [
  "bytes",
  "serde",
