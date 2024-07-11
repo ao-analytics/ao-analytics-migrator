@@ -39,87 +39,27 @@ pub fn get_items_from_file(path: &str) -> Option<Vec<json::item::Item>> {
             Ok(items) => {
                 let mut items_vec: Vec<json::item::Item> = Vec::new();
                 items_vec.push(items.items.hideout_item);
+                items_vec.push(items.items.kill_trophy);
                 items
                     .items
                     .tracking_item
                     .into_iter()
+                    .chain(items.items.trash_item.into_iter())
+                    .chain(items.items.farmable_item.into_iter())
+                    .chain(items.items.simple_item.into_iter())
+                    .chain(items.items.siegebanner.into_iter())
+                    .chain(items.items.consumable_item.into_iter())
+                    .chain(items.items.consumable_from_inventory_item.into_iter())
+                    .chain(items.items.equipment_item.into_iter())
+                    .chain(items.items.weapon.into_iter())
+                    .chain(items.items.mount.into_iter())
+                    .chain(items.items.furniture_item.into_iter())
+                    .chain(items.items.mount_skin.into_iter())
+                    .chain(items.items.journal_item.into_iter())
+                    .chain(items.items.labourer_contract.into_iter())
+                    .chain(items.items.transformation_weapon.into_iter())
+                    .chain(items.items.crystal_league_item.into_iter())
                     .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .trash_item
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .farmable_item
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .simple_item
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .siegebanner
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .consumable_item
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .consumable_from_inventory_item
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .equipment_item
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .weapon
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .mount
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .furniture_item
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .mount_skin
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .journal_item
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .labourer_contract
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .transformation_weapon
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items
-                    .items
-                    .crystal_league_item
-                    .into_iter()
-                    .for_each(|item| items_vec.push(item));
-                items_vec.push(items.items.kill_trophy);
                 Some(items_vec)
             }
             Err(e) => {
