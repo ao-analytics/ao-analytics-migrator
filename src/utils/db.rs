@@ -137,8 +137,22 @@ pub async fn insert_item_data(
     let mut item_data_values = Vec::new();
 
     for item in item_data {
-        let mut unique_name = item.unique_name.clone();
-        if let Some(enchantment_level) = &item.enchantment_level {
+        let mut unique_name = item
+            .as_object()
+            .unwrap()
+            .get("@uniquename")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        let enchantment_level = item
+            .as_object()
+            .unwrap()
+            .get("@enchantmentlevel")
+            .and_then(|value| value.as_str().unwrap().parse::<u8>().ok());
+
+        if let Some(enchantment_level) = &enchantment_level {
             if enchantment_level > &0 {
                 unique_name.push_str(&format!("@{}", enchantment_level));
             }
