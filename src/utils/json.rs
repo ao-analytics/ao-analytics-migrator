@@ -39,7 +39,6 @@ pub fn get_items_from_file(path: &str) -> Option<Vec<json::item::Item>> {
             Ok(items) => {
                 let mut items_vec: Vec<json::item::Item> = Vec::new();
                 items_vec.push(items.items.hideout_item);
-                items_vec.push(items.items.kill_trophy);
                 items
                     .items
                     .tracking_item
@@ -59,6 +58,7 @@ pub fn get_items_from_file(path: &str) -> Option<Vec<json::item::Item>> {
                     .chain(items.items.labourer_contract)
                     .chain(items.items.transformation_weapon)
                     .chain(items.items.crystal_league_item)
+                    // .chain(items.items.kill_trophy)
                     .for_each(|item| items_vec.push(item));
                 Some(items_vec)
             }

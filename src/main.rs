@@ -50,7 +50,7 @@ async fn main() {
         Err(e) => warn!("Error inserting localizations: {}", e),
     }
 
-    let result = utils::db::insert_item_data(&pool, &items).await;
+    let result = utils::db::insert_item_data(&pool, items).await;
 
     match result {
         Ok(_) => info!("Inserted items"),

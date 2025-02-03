@@ -1,5 +1,6 @@
 use ao_analytics_models::json;
 use sqlx::PgPool;
+use tracing::warn;
 
 pub async fn insert_locations(
     pool: &PgPool,
@@ -131,26 +132,30 @@ ON CONFLICT (item_unique_name, lang) DO NOTHING",
 
 pub async fn insert_item_data(
     pool: &PgPool,
-    item_data: &Vec<json::item::Item>,
+    item_data: Vec<json::item::Item>,
 ) -> Result<(), sqlx::Error> {
     let mut item_unique_names = Vec::new();
     let mut item_data_values = Vec::new();
 
     for item in item_data {
-        let mut unique_name = item
+        let unique_name = item
             .as_object()
-            .unwrap()
-            .get("@uniquename")
-            .unwrap()
-            .as_str()
-            .unwrap()
-            .to_string();
+            .and_then(|o| o.get("@uniquename"))
+            .and_then(|u| u.as_str().map(|u| u.to_string()));
+
+        let mut unique_name = match unique_name {
+            Some(unique_name) => unique_name,
+            None => {
+                warn!("Failed to grab @uniquename from {}", item);
+                continue;
+            }
+        };
 
         let enchantment_level = item
             .as_object()
-            .unwrap()
-            .get("@enchantmentlevel")
-            .and_then(|value| value.as_str().unwrap().parse::<u8>().ok());
+            .and_then(|o| o.get("@enchantmentlevel"))
+            .and_then(|value| value.as_str())
+            .and_then(|value| value.parse::<u8>().ok());
 
         if let Some(enchantment_level) = &enchantment_level {
             if enchantment_level > &0 {
@@ -159,7 +164,7 @@ pub async fn insert_item_data(
         }
 
         item_unique_names.push(unique_name);
-        item_data_values.push(serde_json::to_value(item).unwrap());
+        item_data_values.push(item);
     }
 
     let transaction = pool.begin().await?;
