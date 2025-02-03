@@ -1,11 +1,12 @@
-FROM lukemathwalker/cargo-chef:latest as planner
+FROM lukemathwalker/cargo-chef:latest AS planner
 
 WORKDIR /ao-analytics-migrator
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM lukemathwalker/cargo-chef:latest as builder
+FROM lukemathwalker/cargo-chef:latest AS builder
 
+RUN apt install pkg-config libssl-dev
 ENV SQLX_OFFLINE=true
 WORKDIR /ao-analytics-migrator
 COPY --from=planner /ao-analytics-migrator/recipe.json recipe.json
