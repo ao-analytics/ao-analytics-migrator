@@ -1,33 +1,70 @@
-use ao_analytics_models::json;
+use crate::models::json;
 use sqlx::PgPool;
 use tracing::warn;
 
 pub async fn insert_locations(
     pool: &PgPool,
-    locations: &Vec<json::location::Location>,
+    locations: &Vec<json::Location>,
 ) -> Result<(), sqlx::Error> {
     let transaction = pool.begin().await?;
 
-    let mut location_ids: Vec<String> = Vec::new();
+    let mut ids: Vec<String> = Vec::new();
+    let mut location_ids: Vec<Option<i16>> = Vec::new();
     let mut location_names: Vec<String> = Vec::new();
 
     for location in locations {
-        location_ids.push(location.id.to_string());
+        let location_id = match location.id.parse::<i16>() {
+            Ok(location_id) => Some(location_id),
+            Err(_) => {
+                if location.id.starts_with("BLACKBANK-") {
+                    match location.id.split('-').rev().next().unwrap().parse::<i16>() {
+                        Ok(location_id) => Some(location_id),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            }
+        };
+        ids.push(location.id.clone());
+        location_ids.push(location_id);
+
         location_names.push(location.name.to_string());
     }
 
     sqlx::query!(
         "
 INSERT INTO location (
-id,
-name)
-SELECT DISTINCT ON (id) id, name FROM UNNEST(
-    $1::VARCHAR[],
-    $2::VARCHAR[])
-AS t(id, name)
+    id)
+SELECT DISTINCT ON (id) id FROM UNNEST(
+    $1::SMALLINT[])
+AS t(id)
+ON CONFLICT DO NOTHING",
+        &location_ids.iter().filter_map(|f| *f).collect::<Vec<i16>>(),
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query!(
+        "
+INSERT INTO location_data (
+    id,
+    location_id,
+    name)
+SELECT DISTINCT ON (id)
+    id,
+    location_id,
+    name
+FROM UNNEST(
+    $1::TEXT[],
+    $2::SMALLINT[],
+    $3::TEXT[])
+AS t(id, location_id, name)
 ON CONFLICT (id) DO UPDATE
-    SET name = EXCLUDED.name",
-        &location_ids,
+    SET location_id = EXCLUDED.location_id,
+        name = EXCLUDED.name",
+        &ids,
+        &location_ids as _,
         &location_names
     )
     .execute(pool)
@@ -40,9 +77,11 @@ ON CONFLICT (id) DO UPDATE
 
 pub async fn insert_localizations(
     pool: &PgPool,
-    localizations: &Vec<json::localization::Localization>,
+    localizations: &Vec<json::Localization>,
 ) -> Result<(), sqlx::Error> {
     let mut item_unique_names: Vec<String> = Vec::new();
+    let mut item_group_names: Vec<String> = Vec::new();
+    let mut enchantment_levels: Vec<i16> = Vec::new();
 
     let mut descriptions_item_unique_names: Vec<String> = Vec::new();
     let mut descriptions_langs: Vec<String> = Vec::new();
@@ -54,6 +93,15 @@ pub async fn insert_localizations(
 
     for localization in localizations {
         let item_unique_name = &localization.unique_name;
+
+        item_group_names.push(item_unique_name.split('@').next().unwrap().to_string());
+        enchantment_levels.push(
+            item_unique_name
+                .split('@')
+                .rev()
+                .next()
+                .map_or(0, |str| str.parse().unwrap_or(0)),
+        );
 
         item_unique_names.push(item_unique_name.clone());
 
@@ -78,13 +126,37 @@ pub async fn insert_localizations(
 
     sqlx::query!(
         "
-INSERT INTO item (
-    unique_name)
-SELECT DISTINCT ON (unique_name) unique_name FROM UNNEST(
+INSERT INTO item_group (name)
+SELECT DISTINCT ON (name)
+    name
+FROM UNNEST(
     $1::VARCHAR[])
-AS t(unique_name)
+AS t(name)
 ON CONFLICT DO NOTHING",
-        &item_unique_names
+        &item_group_names,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query!(
+        "
+INSERT INTO item (
+    unique_name,
+    enchantment_level,
+    item_group_name)
+SELECT DISTINCT ON (unique_name)
+    unique_name,
+    enchantment_level,
+    item_group_name
+FROM UNNEST(
+    $1::VARCHAR[],
+    $2::SMALLINT[],
+    $3::VARCHAR[])
+AS t(unique_name, enchantment_level, item_group_name)
+ON CONFLICT DO NOTHING",
+        &item_unique_names,
+        &enchantment_levels,
+        &item_group_names,
     )
     .execute(pool)
     .await?;
@@ -132,36 +204,24 @@ ON CONFLICT (item_unique_name, lang) DO NOTHING",
 
 pub async fn insert_item_data(
     pool: &PgPool,
-    item_data: Vec<json::item::Item>,
+    item_data: Vec<json::Item>,
 ) -> Result<(), sqlx::Error> {
     let mut item_unique_names = Vec::new();
     let mut item_data_values = Vec::new();
 
     for item in item_data {
-        let unique_name = item
+        let item_group_name = item
             .as_object()
             .and_then(|o| o.get("@uniquename"))
             .and_then(|u| u.as_str().map(|u| u.to_string()));
 
-        let mut unique_name = match unique_name {
+        let unique_name = match item_group_name {
             Some(unique_name) => unique_name,
             None => {
                 warn!("Failed to grab @uniquename from {}", item);
                 continue;
             }
         };
-
-        let enchantment_level = item
-            .as_object()
-            .and_then(|o| o.get("@enchantmentlevel"))
-            .and_then(|value| value.as_str())
-            .and_then(|value| value.parse::<u8>().ok());
-
-        if let Some(enchantment_level) = &enchantment_level {
-            if enchantment_level > &0 {
-                unique_name.push_str(&format!("@{}", enchantment_level));
-            }
-        }
 
         item_unique_names.push(unique_name);
         item_data_values.push(item);
@@ -172,12 +232,12 @@ pub async fn insert_item_data(
     sqlx::query!(
         "
 INSERT INTO item_data (
-    item_unique_name,
+    item_group_name,
     data)
 SELECT * FROM UNNEST(
     $1::VARCHAR[],
     $2::JSONB[])
-ON CONFLICT (item_unique_name) DO UPDATE
+ON CONFLICT (item_group_name) DO UPDATE
     SET data = EXCLUDED.data",
         &item_unique_names,
         &item_data_values

@@ -3,6 +3,7 @@ use std::path::Path;
 use tracing::{info, warn};
 use utils::json::download_file_to_disk;
 
+mod models;
 mod utils;
 
 #[tokio::main]

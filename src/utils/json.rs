@@ -1,7 +1,7 @@
-use ao_analytics_models::json;
+use crate::models::json;
 use tracing::{info, warn};
 
-pub fn get_localizations_from_file(path: &str) -> Option<Vec<json::localization::Localization>> {
+pub fn get_localizations_from_file(path: &str) -> Option<Vec<json::Localization>> {
     match std::fs::read_to_string(path) {
         Ok(content) => match serde_json::from_str(&content) {
             Ok(localizations) => Some(localizations),
@@ -17,7 +17,7 @@ pub fn get_localizations_from_file(path: &str) -> Option<Vec<json::localization:
     }
 }
 
-pub fn get_locations_from_file(path: &str) -> Option<Vec<json::location::Location>> {
+pub fn get_locations_from_file(path: &str) -> Option<Vec<json::Location>> {
     match std::fs::read_to_string(path) {
         Ok(content) => match serde_json::from_str(&content) {
             Ok(locations) => Some(locations),
@@ -33,11 +33,11 @@ pub fn get_locations_from_file(path: &str) -> Option<Vec<json::location::Locatio
     }
 }
 
-pub fn get_items_from_file(path: &str) -> Option<Vec<json::item::Item>> {
+pub fn get_items_from_file(path: &str) -> Option<Vec<json::Item>> {
     match std::fs::read_to_string(path) {
-        Ok(content) => match serde_json::from_str::<json::item::Root>(&content) {
+        Ok(content) => match serde_json::from_str::<json::Root>(&content) {
             Ok(items) => {
-                let mut items_vec: Vec<json::item::Item> = Vec::new();
+                let mut items_vec: Vec<json::Item> = Vec::new();
                 items_vec.push(items.items.hideout_item);
                 items
                     .items
@@ -58,7 +58,7 @@ pub fn get_items_from_file(path: &str) -> Option<Vec<json::item::Item>> {
                     .chain(items.items.labourer_contract)
                     .chain(items.items.transformation_weapon)
                     .chain(items.items.crystal_league_item)
-                    // .chain(items.items.kill_trophy)
+                    .chain(items.items.kill_trophy)
                     .for_each(|item| items_vec.push(item));
                 Some(items_vec)
             }

@@ -53,9 +53,8 @@ dependencies = [
 
 [[package]]
 name = "ao-analytics-migrator"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
- "ao-analytics-models",
  "bytes",
  "config",
  "dotenv",
@@ -67,17 +66,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "ao-analytics-models"
-version = "0.1.0"
-source = "git+https://github.com/ao-analytics/ao-analytics-models.git#12a8d6d7da82229ade25b771a0cc44e446fb3caf"
-dependencies = [
- "bytes",
- "serde",
- "serde_json",
- "sqlx",
 ]
 
 [[package]]
